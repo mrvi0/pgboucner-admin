@@ -6,7 +6,7 @@ import sys
 
 import uvicorn
 
-from admin import backend_test, config_generator, db, ephemeral_auth
+from admin import backend_test, config_generator, db, debug_pool, ephemeral_auth
 from admin.settings import DOCKER_COMPOSE, HOST, PORT, ROOT, SESSION_SECRET
 
 
@@ -80,6 +80,15 @@ def cmd_reset_password(args: argparse.Namespace) -> int:
     print(f"Пароль:       {plain}")
     print(f"Database:     {pool_name}")
     print("Подключение:  psql -h <host> -p 6432 -U", username, "-d", pool_name)
+    return 0
+
+
+def cmd_debug_pool(args: argparse.Namespace) -> int:
+    db.init_db()
+    if args.compare is not None:
+        print(debug_pool.compare_password(args.pool, args.compare))
+    else:
+        print(debug_pool.debug_pool(args.pool))
     return 0
 
 
@@ -161,6 +170,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Веб-админка (одноразовый логин/пароль в консоли на каждый запуск)",
     )
     p_serve.set_defaults(func=cmd_serve)
+
+    p_debug = sub.add_parser(
+        "debug-pool",
+        help="Показать пароль backend из БД и pgbouncer.ini (только для отладки)",
+    )
+    p_debug.add_argument("--pool", default="pool_vi")
+    p_debug.add_argument(
+        "--compare",
+        metavar="PASSWORD",
+        help="Сравнить с паролем, который вы считаете правильным",
+    )
+    p_debug.set_defaults(func=cmd_debug_pool, compare=None)
 
     p_pgpass = sub.add_parser(
         "set-pg-password",
