@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from admin import crypto, db
 from admin.settings import (
@@ -34,14 +35,11 @@ def _backend_conn_str(
     password: str,
     sslmode: str = "disable",
 ) -> str:
+    """URI надёжнее key=value, если в пароле есть @ # пробелы и т.д."""
     mode = sslmode or "disable"
     return (
-        f"host={_conn_value(host)} "
-        f"port={port} "
-        f"dbname={_conn_value(database)} "
-        f"user={_conn_value(user)} "
-        f"password={_conn_value(password)} "
-        f"sslmode={mode}"
+        f"postgres://{quote_plus(user)}:{quote_plus(password)}"
+        f"@{host}:{port}/{quote_plus(database)}?sslmode={mode}"
     )
 
 
@@ -87,6 +85,8 @@ listen_port = {PGBOUNCER_LISTEN_PORT}
 auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 pool_mode = transaction
+verbose = 1
+log_pooler_errors = 1
 max_client_conn = 1000
 default_pool_size = 20
 min_pool_size = 0

@@ -6,7 +6,7 @@ import sys
 
 import uvicorn
 
-from admin import config_generator, db, ephemeral_auth
+from admin import backend_test, config_generator, db, ephemeral_auth
 from admin.settings import DOCKER_COMPOSE, HOST, PORT, ROOT, SESSION_SECRET
 
 
@@ -83,6 +83,17 @@ def cmd_reset_password(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_test_backend(args: argparse.Namespace) -> int:
+    db.init_db()
+    ok, msg = backend_test.test_backend(args.pool)
+    print(msg)
+    if ok:
+        print("\nЕсли test-backend OK, а PgBouncer — server conn crashed:")
+        print("  docker compose exec pgbouncer sh -c 'apk add --no-cache postgresql-client 2>/dev/null; psql \"$DATABASE_URL\"'")
+        print("  или: python -m admin reload && docker compose restart pgbouncer")
+    return 0 if ok else 1
+
+
 def cmd_reload(args: argparse.Namespace) -> int:
     db.init_db()
     config_generator.generate_configs()
@@ -108,6 +119,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Веб-админка (одноразовый логин/пароль в консоли на каждый запуск)",
     )
     p_serve.set_defaults(func=cmd_serve)
+
+    p_test = sub.add_parser(
+        "test-backend",
+        help="Проверить PostgreSQL напрямую (как в админке, без PgBouncer)",
+    )
+    p_test.add_argument("--pool", default="pool_vi", help="Имя пула, по умолчанию pool_vi")
+    p_test.set_defaults(func=cmd_test_backend)
 
     p_reload = sub.add_parser("reload", help="Перегенерировать конфиг и RELOAD")
     p_reload.set_defaults(func=cmd_reload)

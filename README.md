@@ -114,12 +114,21 @@ psql "postgresql://v_redka:ПАРОЛЬ@134.209.242.88:42002/rate_shopper?sslmod
 
 Если не подключается — host, port `42002`, user/password PostgreSQL или firewall (**разрешите IP vpn-panel** `89.125.17.107`).
 
-Если `psql` работает, а PgBouncer нет:
+Диагностика одной командой (с vpn-panel, без PgBouncer):
 
 ```bash
-sqlite3 data/admin.db "UPDATE postgres_servers SET sslmode='disable';"
-python -m admin reload
+pip install psycopg2-binary   # если ещё нет
+python -m admin test-backend --pool pool_vi
 ```
+
+Если **test-backend OK**, а в логах PgBouncer `server conn crashed` — после обновления кода:
+
+```bash
+python -m admin reload
+docker compose restart pgbouncer
+```
+
+Если **test-backend FAIL** — исправьте host/port/user/password PostgreSQL в админке (это не PgBouncer).
 
 ## Безопасность
 
