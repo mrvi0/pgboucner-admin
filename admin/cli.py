@@ -98,10 +98,10 @@ def cmd_reload(args: argparse.Namespace) -> int:
     from admin.config_generator import _backend_conn_str
 
     sample = _backend_conn_str("127.0.0.1", 5432, "db", "u", "p")
-    if sample.startswith("postgres://"):
+    if "sslmode" in sample or sample.startswith("postgres://"):
         print(
-            "Ошибка: на сервере старый admin/config_generator.py (формат postgres://).\n"
-            "Скопируйте актуальный файл из репозитория и повторите reload.",
+            "Ошибка: устаревший admin/config_generator.py (postgres:// или sslmode в [databases]).\n"
+            "Скопируйте актуальный config_generator.py и повторите reload.",
             file=sys.stderr,
         )
         return 1
@@ -110,8 +110,8 @@ def cmd_reload(args: argparse.Namespace) -> int:
     config_generator.generate_configs()
 
     ini = config_generator.PGBOUNCER_INI.read_text(encoding="utf-8")
-    if "postgres://" in ini:
-        print("Ошибка: в pgbouncer.ini всё ещё postgres:// — reload не применился.", file=sys.stderr)
+    if "postgres://" in ini or " sslmode=" in ini:
+        print("Ошибка: в pgbouncer.ini недопустимый формат (postgres:// или sslmode в пуле).", file=sys.stderr)
         return 1
 
     for line in ini.splitlines():

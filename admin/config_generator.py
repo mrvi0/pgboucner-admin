@@ -31,18 +31,23 @@ def _backend_conn_str(
     database: str,
     user: str,
     password: str,
-    sslmode: str = "disable",
 ) -> str:
-    """libpq key=value — PgBouncer 1.24 не понимает postgres:// URI в [databases]."""
-    mode = sslmode or "disable"
+    """libpq key=value для [databases]. Без sslmode — его задаёт server_tls_sslmode в [pgbouncer]."""
     return (
         f"host={_conn_value(host)} "
         f"port={port} "
         f"dbname={_conn_value(database)} "
         f"user={_conn_value(user)} "
-        f"password={_conn_value(password)} "
-        f"sslmode={mode}"
+        f"password={_conn_value(password)}"
     )
+
+
+def _server_tls_sslmode(rows: list) -> str:
+    """Глобальный TLS к PostgreSQL: require если хотя бы один backend требует."""
+    for row in rows:
+        if (row["sslmode"] or "disable") == "require":
+            return "require"
+    return "disable"
 
 
 def generate_configs() -> None:
@@ -63,6 +68,8 @@ def generate_configs() -> None:
             """
         ).fetchall()
 
+    server_tls = _server_tls_sslmode(rows)
+
     for row in rows:
         pg_password = crypto.decrypt_secret(row["password_enc"], db.storage_key())
         conn_str = _backend_conn_str(
@@ -71,7 +78,6 @@ def generate_configs() -> None:
             row["database"],
             row["user"],
             pg_password,
-            row["sslmode"] or "disable",
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
         userlist_lines.append(f'"{row["username"]}" "{row["auth_md5"]}"')
@@ -86,6 +92,7 @@ listen_addr = 0.0.0.0
 listen_port = {PGBOUNCER_LISTEN_PORT}
 auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
+server_tls_sslmode = {server_tls}
 pool_mode = transaction
 verbose = 1
 log_pooler_errors = 1
