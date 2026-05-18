@@ -65,6 +65,16 @@ def _backend_conn_str(host: str, port: int, database: str, user: str) -> str:
     )
 
 
+def _load_pgpass_lines() -> list[str]:
+    if not PGPASS_FILE.is_file():
+        return []
+    return [
+        ln
+        for ln in PGPASS_FILE.read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+
+
 def _write_pgpass(lines: list[str]) -> None:
     if PGPASS_FILE.exists() and PGPASS_FILE.is_dir():
         raise RuntimeError(
@@ -84,13 +94,16 @@ def generate_configs(*, verify_backends: bool = True) -> None:
     userlist_lines: list[str] = []
     pgpass_lines: list[str] = []
     pgpass_seen: set[str] = set()
+    existing_pgpass = _load_pgpass_lines()
 
     with db.connect() as conn:
         rows = conn.execute(
             """
-            SELECT u.username, u.pool_name, u.auth_md5, u.password_enc,
+            SELECT u.username, u.pool_name, u.auth_md5,
+                   u.password_enc AS client_password_enc,
                    s.id AS server_id, s.name AS server_name,
-                   s.host, s.port, s.database, s.user, s.password_enc, s.sslmode
+                   s.host, s.port, s.database, s.user,
+                   s.password_enc AS server_password_enc, s.sslmode
             FROM pgbouncer_users u
             JOIN postgres_servers s ON s.id = u.postgres_server_id
             ORDER BY u.pool_name
@@ -100,7 +113,25 @@ def generate_configs(*, verify_backends: bool = True) -> None:
     server_tls_modes: list[str] = []
 
     for row in rows:
-        pg_password = crypto.decrypt_secret(row["password_enc"], db.storage_key())
+        server_enc = row["server_password_enc"]
+        if not server_enc:
+            if verify_backends:
+                raise RuntimeError(
+                    f"Пул «{row['pool_name']}»: нет пароля PostgreSQL для сервера "
+                    f"«{row['server_name']}». Задайте: make set-pg-password SERVER={row['server_name']} PASS='...'"
+                )
+            print(
+                f"Внимание: пул «{row['pool_name']}» — нет пароля сервера «{row['server_name']}» "
+                f"в БД, строка pgpass из прежнего файла (если есть).",
+                flush=True,
+            )
+            for ln in existing_pgpass:
+                if ln not in pgpass_seen:
+                    pgpass_seen.add(ln)
+                    pgpass_lines.append(ln)
+            pg_password = ""
+        else:
+            pg_password = crypto.decrypt_secret(server_enc, db.storage_key())
         sslmode = row["sslmode"] or "disable"
         working_ssl = sslmode
         if verify_backends:
@@ -132,20 +163,23 @@ def generate_configs(*, verify_backends: bool = True) -> None:
             sslmode = working_ssl
         server_tls_modes.append(sslmode)
 
-        pline = _pgpass_line(
-            row["host"], row["port"], row["database"], row["user"], pg_password
-        )
-        if pline not in pgpass_seen:
-            pgpass_seen.add(pline)
-            pgpass_lines.append(pline)
+        if pg_password:
+            pline = _pgpass_line(
+                row["host"], row["port"], row["database"], row["user"], pg_password
+            )
+            if pline not in pgpass_seen:
+                pgpass_seen.add(pline)
+                pgpass_lines.append(pline)
 
         conn_str = _backend_conn_str(
             row["host"], row["port"], row["database"], row["user"]
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
         client_pwd = None
-        if row["password_enc"]:
-            client_pwd = crypto.decrypt_secret(row["password_enc"], db.storage_key())
+        if row["client_password_enc"]:
+            client_pwd = crypto.decrypt_secret(
+                row["client_password_enc"], db.storage_key()
+            )
         if client_pwd is not None:
             userlist_lines.append(
                 f"{_userlist_quoted(row['username'])} {_userlist_quoted(client_pwd)}"
