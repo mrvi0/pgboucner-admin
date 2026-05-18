@@ -29,6 +29,40 @@ def fetch_backend(pool_name: str) -> dict[str, str | int]:
     }
 
 
+def verify_postgres(
+    host: str,
+    port: int,
+    database: str,
+    user: str,
+    password: str,
+    sslmode: str = "disable",
+) -> tuple[bool, str, str]:
+    """Проверка как psql. Перебирает sslmode, если первый не подошёл."""
+    try:
+        import psycopg2
+    except ImportError:
+        return False, "pip install psycopg2-binary", sslmode
+
+    modes: list[str] = []
+    for m in (sslmode, "disable", "require", "prefer"):
+        if m not in modes:
+            modes.append(m)
+
+    last_err = ""
+    for mode in modes:
+        dsn = (
+            f"host={host} port={port} dbname={database} "
+            f"user={user} password={password} sslmode={mode} connect_timeout=10"
+        )
+        try:
+            conn = psycopg2.connect(dsn)
+            conn.close()
+            return True, "", mode
+        except Exception as exc:
+            last_err = f"sslmode={mode}: {exc}"
+    return False, last_err, sslmode
+
+
 def test_backend(pool_name: str = "pool_vi") -> tuple[bool, str]:
     try:
         import psycopg2

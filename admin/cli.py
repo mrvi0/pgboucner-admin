@@ -137,7 +137,11 @@ def cmd_reload(args: argparse.Namespace) -> int:
         return 1
 
     db.init_db()
-    config_generator.generate_configs()
+    try:
+        config_generator.generate_configs(verify_backends=not args.skip_verify)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     ini = config_generator.PGBOUNCER_INI.read_text(encoding="utf-8")
     if "postgres://" in ini or "passfile=" in ini or " sslmode=" in ini:
@@ -211,7 +215,12 @@ def main(argv: list[str] | None = None) -> int:
     p_test.set_defaults(func=cmd_test_backend, via_docker=False)
 
     p_reload = sub.add_parser("reload", help="Перегенерировать конфиг и RELOAD")
-    p_reload.set_defaults(func=cmd_reload)
+    p_reload.add_argument(
+        "--skip-verify",
+        action="store_true",
+        help="Не проверять PostgreSQL через psycopg2 (не рекомендуется)",
+    )
+    p_reload.set_defaults(func=cmd_reload, skip_verify=False)
 
     p_reset = sub.add_parser(
         "reset-password",
