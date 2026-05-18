@@ -43,6 +43,11 @@ def debug_pool(pool_name: str) -> str:
         return str(exc)
 
     ini = _read_ini_pool(pool_name)
+    pwd = cfg["password"]
+    quote_warn = ""
+    if pwd and (pwd[0] in "'\"" or pwd[-1] in "'\""):
+        quote_warn = "  ⚠ В пароле есть кавычки как СИМВОЛЫ — удалите их в set-pg-password"
+
     lines = [
         f"=== Пул «{pool_name}» ===",
         f"Сервер в админке: «{cfg['server_name']}»",
@@ -52,10 +57,13 @@ def debug_pool(pool_name: str) -> str:
         f"  port:     {cfg['port']}",
         f"  dbname:   {cfg['database']}",
         f"  user:     {cfg['user']}",
-        f"  password: {cfg['password']!r}",
-        f"  длина:    {len(cfg['password'])} символов",
-        f"  bytes:    {cfg['password'].encode('utf-8')!r}",
+        f"  password: [{pwd}]",
+        f"  (квадратные скобки — рамка; одинарные кавычки '...' в repr НЕ часть пароля)",
+        f"  длина:    {len(pwd)} символов",
+        quote_warn,
     ]
+    if pwd:
+        lines.append(f"  hex:      {pwd.encode('utf-8').hex()}")
 
     if ini:
         same = ini.get("password") == cfg["password"]
@@ -67,7 +75,7 @@ def debug_pool(pool_name: str) -> str:
                 f"  port:     {ini.get('port', '?')}",
                 f"  dbname:   {ini.get('dbname', '?')}",
                 f"  user:     {ini.get('user', '?')}",
-                f"  password: {ini.get('password', '?')!r}",
+                f"  password: [{ini.get('password', '?')}]",
                 f"  длина:    {len(ini.get('password', ''))} символов",
                 "",
                 f"  Совпадает с SQLite: {'ДА' if same else 'НЕТ — сделайте python -m admin reload'}",
@@ -97,9 +105,10 @@ def compare_password(pool_name: str, candidate: str) -> str:
     cand = candidate
     lines = [
         f"Пул «{pool_name}», пользователь PostgreSQL «{cfg['user']}»",
-        f"  в БД:      {stored!r} ({len(stored)} симв.)",
-        f"  вы ввели:  {cand!r} ({len(cand)} симв.)",
+        f"  в БД:      [{stored}] ({len(stored)} симв.)",
+        f"  вы ввели:  [{cand}] ({len(cand)} симв.)",
         f"  равны:     {'ДА' if stored == cand else 'НЕТ'}",
+        "  (символы [ ] — только оформление вывода, не кавычки пароля)",
     ]
     if stored != cand:
         lines.append("")
