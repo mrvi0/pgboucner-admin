@@ -5,6 +5,5 @@ __pycache__/
 venv/
 runtime/pgbouncer.ini
 runtime/userlist.txt
-runtime/pgpass
 data/
 *.db

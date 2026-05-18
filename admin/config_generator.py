@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import re
-import stat
 import subprocess
 from pathlib import Path
 
@@ -11,8 +10,6 @@ from admin.settings import (
     DOCKER_COMPOSE,
     PGBOUNCER_INI,
     PGBOUNCER_LISTEN_PORT,
-    PGPASS_CONTAINER_PATH,
-    PGPASS_FILE,
     RUNTIME_DIR,
     USERLIST_TXT,
 )
@@ -29,30 +26,26 @@ def _conn_value(value: str) -> str:
     return f'"{escaped}"'
 
 
-def _pgpass_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(":", "\\:")
+def _password_value(password: str) -> str:
+    """Всегда в двойных кавычках — PgBouncer/libpq иначе может обрезать пароль при SCRAM."""
+    p = password.strip().strip("\r")
+    escaped = p.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
-def _pgpass_line(host: str, port: int, database: str, user: str, password: str) -> str:
-    return ":".join(
-        [
-            _pgpass_escape(host),
-            str(port),
-            _pgpass_escape(database),
-            _pgpass_escape(user),
-            _pgpass_escape(password.strip().strip("\r")),
-        ]
-    )
-
-
-def _backend_conn_str(host: str, port: int, database: str, user: str) -> str:
-    """Пароль не в ini — только passfile (как у psql/.pgpass), иначе PgBouncer может исказить password=."""
+def _backend_conn_str(
+    host: str,
+    port: int,
+    database: str,
+    user: str,
+    password: str,
+) -> str:
     return (
         f"host={_conn_value(host)} "
         f"port={port} "
         f"dbname={_conn_value(database)} "
         f"user={_conn_value(user)} "
-        f"passfile={PGPASS_CONTAINER_PATH}"
+        f"password={_password_value(password)}"
     )
 
 
@@ -69,8 +62,6 @@ def generate_configs() -> None:
 
     database_lines: list[str] = []
     userlist_lines: list[str] = []
-    pgpass_lines: list[str] = []
-    pgpass_seen: set[str] = set()
 
     with db.connect() as conn:
         rows = conn.execute(
@@ -92,21 +83,14 @@ def generate_configs() -> None:
             row["port"],
             row["database"],
             row["user"],
+            pg_password,
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
         userlist_lines.append(f'"{row["username"]}" "{row["auth_md5"]}"')
-
-        pline = _pgpass_line(
-            row["host"], row["port"], row["database"], row["user"], pg_password
-        )
-        if pline not in pgpass_seen:
-            pgpass_seen.add(pline)
-            pgpass_lines.append(pline)
-
         if os.environ.get("PGB_DEBUG_LOG_PASSWORDS") == "1":
             print(
                 f"[PGB_DEBUG] {row['pool_name']}: user={row['user']} "
-                f"password_len={len(pg_password.strip())} (в pgpass, не в ini)",
+                f"password_len={len(pg_password.strip())}",
                 flush=True,
             )
 
@@ -141,11 +125,6 @@ ignore_startup_parameters = extra_float_digits
         newline="\n",
     )
     PGBOUNCER_INI.write_text(ini_body, encoding="utf-8", newline="\n")
-
-    pgpass_body = "\n".join(pgpass_lines) + ("\n" if pgpass_lines else "")
-    PGPASS_FILE.write_text(pgpass_body, encoding="utf-8", newline="\n")
-    if pgpass_lines:
-        PGPASS_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def reload_pgbouncer() -> tuple[bool, str]:
