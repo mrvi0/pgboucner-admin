@@ -126,7 +126,7 @@ def create_pgbouncer_user(
     username: str, password: str, postgres_server_id: int
 ) -> tuple[int, str]:
     pool_name = f"pool_{username}"
-    auth_md5 = crypto.pgbouncer_md5_password(username, password)
+    auth_secret = crypto.pgbouncer_auth_secret(username, password)
     with connect() as conn:
         cur = conn.execute(
             """
@@ -134,9 +134,36 @@ def create_pgbouncer_user(
                 (username, pool_name, auth_md5, postgres_server_id, created_at)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (username, pool_name, auth_md5, postgres_server_id, _now()),
+            (username, pool_name, auth_secret, postgres_server_id, _now()),
         )
         return cur.lastrowid, pool_name
+
+
+def reset_pgbouncer_password(user_id: int, password: str | None = None) -> tuple[str, str, str]:
+    """Новый пароль и pool_name. Возвращает (username, password, pool_name)."""
+    plain = password or crypto.random_password()
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT username, pool_name FROM pgbouncer_users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row:
+            raise ValueError("пользователь не найден")
+        auth_secret = crypto.pgbouncer_auth_secret(row["username"], plain)
+        conn.execute(
+            "UPDATE pgbouncer_users SET auth_md5 = ? WHERE id = ?",
+            (auth_secret, user_id),
+        )
+        return row["username"], plain, row["pool_name"]
+
+
+def reset_pgbouncer_password_by_name(username: str, password: str | None = None) -> tuple[str, str, str]:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM pgbouncer_users WHERE username = ?", (username,)
+        ).fetchone()
+        if not row:
+            raise ValueError(f"пользователь «{username}» не найден")
+        return reset_pgbouncer_password(row["id"], password)
 
 
 def delete_pgbouncer_user(user_id: int) -> None:

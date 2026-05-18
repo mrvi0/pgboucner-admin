@@ -5,9 +5,34 @@ import hashlib
 import secrets
 
 def pgbouncer_md5_password(username: str, password: str) -> str:
-    """PgBouncer userlist format: md5 + md5(password + username)."""
+    """PgBouncer userlist: md5 + md5(password + username) — только для старых клиентов."""
     inner = hashlib.md5((password + username).encode()).hexdigest()
     return "md5" + inner
+
+
+def pgbouncer_scram_secret(password: str, iterations: int = 4096) -> str:
+    """SCRAM-SHA-256 для userlist.txt (DataGrip, JDBC 42+, psql 14+)."""
+    import hmac
+
+    salt = secrets.token_bytes(16)
+    salted_password = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, iterations
+    )
+    client_key = hmac.new(salted_password, b"Client Key", hashlib.sha256).digest()
+    stored_key = hashlib.sha256(client_key).digest()
+    server_key = hmac.new(salted_password, b"Server Key", hashlib.sha256).digest()
+    salt_b64 = base64.b64encode(salt).decode("ascii")
+    return (
+        f"SCRAM-SHA-256${iterations}:{salt_b64}$"
+        f"{base64.b64encode(stored_key).decode('ascii')}:"
+        f"{base64.b64encode(server_key).decode('ascii')}"
+    )
+
+
+def pgbouncer_auth_secret(username: str, password: str) -> str:
+    """Хеш для userlist: SCRAM (username не входит в расчёт SCRAM-секрета)."""
+    _ = username
+    return pgbouncer_scram_secret(password)
 
 
 def encrypt_secret(plain: str, key: bytes) -> str:

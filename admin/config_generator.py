@@ -52,7 +52,7 @@ def generate_configs() -> None:
 [pgbouncer]
 listen_addr = 0.0.0.0
 listen_port = {PGBOUNCER_LISTEN_PORT}
-auth_type = md5
+auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
 pool_mode = transaction
 max_client_conn = 1000

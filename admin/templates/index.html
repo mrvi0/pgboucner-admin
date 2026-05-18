@@ -54,8 +54,11 @@
         <td><code>{{ u.username }}</code></td>
         <td><code>{{ u.pool_name }}</code></td>
         <td>{{ u.server_name }} ({{ u.host }}:{{ u.port }})</td>
-        <td>
-          <form method="post" action="/users/{{ u.id }}/delete" style="margin:0" onsubmit="return confirm('Удалить пользователя?');">
+        <td style="white-space:nowrap">
+          <form method="post" action="/users/{{ u.id }}/reset-password" style="margin:0;display:inline" onsubmit="return confirm('Сгенерировать новый пароль? Старый перестанет работать.');">
+            <button class="btn btn-ghost" type="submit" style="padding:.3rem .6rem;font-size:.8rem">Новый пароль</button>
+          </form>
+          <form method="post" action="/users/{{ u.id }}/delete" style="margin:0;display:inline" onsubmit="return confirm('Удалить пользователя?');">
             <button class="btn btn-danger" type="submit" style="padding:.3rem .6rem;font-size:.8rem">Удалить</button>
           </form>
         </td>

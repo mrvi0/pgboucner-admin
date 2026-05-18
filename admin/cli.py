@@ -63,6 +63,26 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_reset_password(args: argparse.Namespace) -> int:
+    db.init_db()
+    if not args.username:
+        print("Укажите логин: python -m admin reset-password vi", file=sys.stderr)
+        return 1
+    try:
+        username, plain, pool_name = db.reset_pgbouncer_password_by_name(
+            args.username, args.password
+        )
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    config_generator.apply_and_reload()
+    print(f"Пользователь: {username}")
+    print(f"Пароль:       {plain}")
+    print(f"Database:     {pool_name}")
+    print("Подключение:  psql -h <host> -p 6432 -U", username, "-d", pool_name)
+    return 0
+
+
 def cmd_reload(args: argparse.Namespace) -> int:
     db.init_db()
     config_generator.generate_configs()
@@ -91,6 +111,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p_reload = sub.add_parser("reload", help="Перегенерировать конфиг и RELOAD")
     p_reload.set_defaults(func=cmd_reload)
+
+    p_reset = sub.add_parser(
+        "reset-password",
+        help="Новый пароль пользователя PgBouncer (показать в консоли)",
+    )
+    p_reset.add_argument("username", help="Логин, например vi")
+    p_reset.add_argument("-p", "--password", help="Задать пароль вручную")
+    p_reset.set_defaults(func=cmd_reset_password, password=None)
 
     args = parser.parse_args(argv)
     return args.func(args)

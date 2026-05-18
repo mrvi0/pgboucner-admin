@@ -51,6 +51,54 @@ psql -h localhost -p 6432 -U <pgb_user> -d pool_<pgb_user>
 
 При изменениях в UI выполняется `RELOAD` через `kill -HUP` в контейнере.
 
+## Ошибка «password authentication failed»
+
+1. Пароль PgBouncer показывается **один раз** при создании или сбросе — сохраните его.
+2. DataGrip/JDBC используют SCRAM — в конфиге `auth_type = scram-sha-256`.
+3. Сбросить пароль на сервере:
+
+```bash
+python -m admin reset-password vi
+python -m admin reload
+```
+
+Или в админке: кнопка **Новый пароль** у пользователя.
+
+## JDBC (DBeaver, DataGrip, приложения)
+
+```
+jdbc:postgresql://89.125.17.107:6432/pool_vi?user=vi&password=ВАШ_ПАРОЛЬ&sslmode=disable
+```
+
+- **user** — логин PgBouncer (не пользователь PostgreSQL на backend)
+- **database** в URL — имя пула (`pool_vi` для пользователя `vi`)
+- **sslmode=disable** — PgBouncer в Docker без TLS; с `sslmode=require` клиент может не подключиться
+
+## Если «Connection timed out»
+
+Таймаут почти всегда значит, что **TCP до порта 6432 не доходит** (не пароль и не имя БД).
+
+**На сервере:**
+
+```bash
+docker ps | grep pgbouncer
+ss -tlnp | grep 6432          # должно быть 0.0.0.0:6432
+sudo ufw allow 6432/tcp         # если включён ufw
+sudo ufw status
+```
+
+В панели хостинга (Hetzner, AWS, …) откройте **входящий TCP 6432** в Security Group / firewall.
+
+**С вашего ПК:**
+
+```bash
+nc -zv 89.125.17.107 6432
+```
+
+Если `timed out` — порт закрыт снаружи. Если `succeeded` — укажите в JDBC `user`, `password` и `sslmode=disable`.
+
+После правок: `python -m admin reload` и при необходимости `docker compose up -d`.
+
 ## Безопасность
 
 - Админка по умолчанию слушает `0.0.0.0` (доступ с других хостов, пока запущен `serve`)

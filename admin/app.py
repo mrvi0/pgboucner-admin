@@ -184,6 +184,23 @@ async def user_create(
         )
 
 
+@app.post("/users/{user_id}/reset-password")
+async def user_reset_password(
+    request: Request,
+    user_id: int,
+    _: str = Depends(require_login),
+):
+    try:
+        username, plain, pool_name = db.reset_pgbouncer_password(user_id)
+        ok, msg = config_generator.apply_and_reload()
+        request.session["flash"] = (
+            f"Новый пароль для «{username}»: {plain}  |  database={pool_name}  |  {msg}"
+        )
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+    return RedirectResponse("/", status_code=303)
+
+
 @app.post("/users/{user_id}/delete")
 async def user_delete(
     request: Request,
