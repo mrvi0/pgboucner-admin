@@ -8,3 +8,4 @@ services:
     volumes:
       - ./runtime/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
       - ./runtime/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+      - ./runtime/pgpass:/etc/pgbouncer/pgpass:ro

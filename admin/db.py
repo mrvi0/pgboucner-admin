@@ -91,7 +91,7 @@ def create_postgres_server(
     password: str,
     sslmode: str = "disable",
 ) -> int:
-    password = password.strip()
+    password = password.strip().strip("\r")
     enc = crypto.encrypt_secret(password, storage_key())
     with connect() as conn:
         cur = conn.execute(
@@ -106,7 +106,7 @@ def create_postgres_server(
 
 
 def update_postgres_password_by_name(name: str, password: str) -> None:
-    password = password.strip()
+    password = password.strip().strip("\r")
     enc = crypto.encrypt_secret(password, storage_key())
     with connect() as conn:
         cur = conn.execute(

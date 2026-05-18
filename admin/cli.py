@@ -139,8 +139,14 @@ def cmd_reload(args: argparse.Namespace) -> int:
     config_generator.generate_configs()
 
     ini = config_generator.PGBOUNCER_INI.read_text(encoding="utf-8")
-    if "postgres://" in ini or " sslmode=" in ini:
-        print("Ошибка: в pgbouncer.ini недопустимый формат (postgres:// или sslmode в пуле).", file=sys.stderr)
+    if "postgres://" in ini or " password=" in ini or " sslmode=" in ini:
+        print(
+            "Ошибка: в pgbouncer.ini не должно быть password=/postgres:// — обновите config_generator.py",
+            file=sys.stderr,
+        )
+        return 1
+    if "passfile=" not in ini and "pool_" in ini:
+        print("Ошибка: в ini нет passfile= — обновите config_generator.py", file=sys.stderr)
         return 1
 
     for line in ini.splitlines():

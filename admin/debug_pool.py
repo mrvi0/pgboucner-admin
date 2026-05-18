@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from admin import crypto, db
-from admin.settings import PGBOUNCER_INI
+from admin.settings import PGBOUNCER_INI, PGPASS_FILE
 
 
 def _parse_pool_line(line: str) -> dict[str, str]:
@@ -13,7 +13,7 @@ def _parse_pool_line(line: str) -> dict[str, str]:
     rhs = rhs.strip()
     out: dict[str, str] = {}
     for m in re.finditer(
-        r'(host|port|dbname|user|password)=("(?:\\.|[^"])*"|\S+)',
+        r'(host|port|dbname|user|password|passfile)=("(?:\\.|[^"])*"|\S+)',
         rhs,
     ):
         key, val = m.group(1), m.group(2)
@@ -30,6 +30,37 @@ def _read_ini_pool(pool_name: str) -> dict[str, str] | None:
     for line in PGBOUNCER_INI.read_text(encoding="utf-8").splitlines():
         if line.strip().startswith(prefix):
             return _parse_pool_line(line)
+    return None
+
+
+def _read_pgpass(host: str, port: str, database: str, user: str) -> str | None:
+    if not PGPASS_FILE.exists():
+        return None
+    for line in PGPASS_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts: list[str] = []
+        cur: list[str] = []
+        i = 0
+        while i < len(line):
+            if line[i] == "\\" and i + 1 < len(line):
+                cur.append(line[i + 1])
+                i += 2
+                continue
+            if line[i] == ":":
+                parts.append("".join(cur))
+                cur = []
+                i += 1
+                continue
+            cur.append(line[i])
+            i += 1
+        parts.append("".join(cur))
+        if len(parts) != 5:
+            continue
+        h, p, d, u, pw = parts
+        if h == host and p == port and d == database and u == user:
+            return pw
     return None
 
 
@@ -65,22 +96,35 @@ def debug_pool(pool_name: str) -> str:
     if pwd:
         lines.append(f"  hex:      {pwd.encode('utf-8').hex()}")
 
-    if ini:
-        same = ini.get("password") == cfg["password"]
+    pgpass_pwd = _read_pgpass(
+        str(cfg["host"]), str(cfg["port"]), str(cfg["database"]), str(cfg["user"])
+    )
+    if pgpass_pwd is not None:
+        same_pg = pgpass_pwd == cfg["password"]
         lines.extend(
             [
                 "",
-                "--- Из runtime/pgbouncer.ini (что читает контейнер) ---",
+                "--- runtime/pgpass (пароль для PgBouncer → PostgreSQL) ---",
+                f"  password: [{pgpass_pwd}]",
+                f"  длина:    {len(pgpass_pwd)} символов",
+                f"  Совпадает с SQLite: {'ДА' if same_pg else 'НЕТ — python -m admin reload'}",
+            ]
+        )
+
+    if ini:
+        lines.extend(
+            [
+                "",
+                "--- runtime/pgbouncer.ini ---",
                 f"  host:     {ini.get('host', '?')}",
                 f"  port:     {ini.get('port', '?')}",
                 f"  dbname:   {ini.get('dbname', '?')}",
                 f"  user:     {ini.get('user', '?')}",
-                f"  password: [{ini.get('password', '?')}]",
-                f"  длина:    {len(ini.get('password', ''))} символов",
-                "",
-                f"  Совпадает с SQLite: {'ДА' if same else 'НЕТ — сделайте python -m admin reload'}",
+                f"  passfile: {ini.get('passfile', '(нет — обновите код)')}",
             ]
         )
+        if ini.get("password"):
+            lines.append(f"  ⚠ password= в ini устарел: {ini.get('password')}")
     else:
         lines.append("")
         lines.append(f"--- В {PGBOUNCER_INI} строка для «{pool_name}» не найдена ---")

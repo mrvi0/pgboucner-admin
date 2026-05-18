@@ -46,7 +46,8 @@ def decrypt_secret(token: str, key: bytes) -> str:
     from cryptography.fernet import Fernet
 
     f = Fernet(base64.urlsafe_b64encode(hashlib.sha256(key).digest()))
-    return f.decrypt(token.encode()).decode()
+    # убрать \r и пробелы — иначе SCRAM к PostgreSQL с «верным» паролем падает
+    return f.decrypt(token.encode()).decode().strip().strip("\r")
 
 
 def derive_storage_key(secret: str) -> bytes:
