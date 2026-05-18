@@ -75,12 +75,31 @@ def cmd_reset_password(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
-    config_generator.apply_and_reload()
+    ok, msg = config_generator.apply_and_reload(verify_backends=False)
     print(f"Пользователь: {username}")
     print(f"Пароль:       {plain}")
     print(f"Database:     {pool_name}")
+    print(f"Reload:       {msg}" if ok else f"Reload:       {msg}", file=sys.stderr)
     print("Подключение:  psql -h <host> -p 6432 -U", username, "-d", pool_name)
-    return 0
+    _warn_backend_if_unhealthy(pool_name)
+    return 0 if ok else 1
+
+
+def _warn_backend_if_unhealthy(pool_name: str) -> None:
+    ok, detail = backend_test.test_backend(pool_name)
+    if ok:
+        return
+    print(
+        "\nВнимание: пароль клиента обновлён, но PostgreSQL для этого пула недоступен.",
+        file=sys.stderr,
+    )
+    for line in detail.splitlines():
+        print(f"  {line}", file=sys.stderr)
+    print(
+        "  Исправьте: make set-pg-password <имя_сервера>  "
+        "(имя из админки, например prod)",
+        file=sys.stderr,
+    )
 
 
 def cmd_verify_client(args: argparse.Namespace) -> int:

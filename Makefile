@@ -5,7 +5,7 @@ PIP  := $(VENV)/bin/pip
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install venv serve up down reload reset-password verify-client test-backend debug-pool
+.PHONY: help install venv serve up down reload reset-password set-pg-password verify-client test-backend debug-pool
 
 help: ## Показать цели
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -33,6 +33,11 @@ reload: install ## Пересобрать конфиг и SIGHUP reload
 reset-password: install ## make reset-password USER=vi
 	@test -n "$(USER)" || (echo "Usage: make reset-password USER=<pgb_user>"; exit 1)
 	$(PY) -m admin reset-password "$(USER)"
+
+set-pg-password: install ## make set-pg-password SERVER=prod PASS='...'
+	@test -n "$(SERVER)" || (echo "Usage: make set-pg-password SERVER=prod PASS='...'"; exit 1)
+	@test -n "$(PASS)" || (echo "Usage: make set-pg-password SERVER=prod PASS='...'"; exit 1)
+	$(PY) -m admin set-pg-password "$(SERVER)" -p "$(PASS)"
 
 verify-client: install ## make verify-client USER=vi PASS='...'
 	@test -n "$(USER)" || (echo "Usage: make verify-client USER=vi PASS='...'"; exit 1)

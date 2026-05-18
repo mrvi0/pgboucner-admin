@@ -70,10 +70,16 @@ psql -h localhost -p 6432 -U <pgb_user> -d pool_<pgb_user>
 make verify-client USER=vi PASS='ваш_пароль'
 ```
 
-3. Сброс и reload:
+3. Сброс и reload (не требует рабочего PostgreSQL — только пароль клиента):
 
 ```bash
 make reset-password USER=vi
+```
+
+Если при `reload` падает проверка `v_redka` — это **backend**, не клиент `vi`:
+
+```bash
+make set-pg-password SERVER=prod PASS='пароль_postgres'
 ```
 
 Или в админке: **Новый пароль** у пользователя (reload выполняется автоматически).

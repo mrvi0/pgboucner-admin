@@ -194,7 +194,7 @@ async def user_reset_password(
 ):
     try:
         username, plain, pool_name = db.reset_pgbouncer_password(user_id)
-        ok, msg = config_generator.apply_and_reload()
+        ok, msg = config_generator.apply_and_reload(verify_backends=False)
         request.session["flash"] = (
             f"Новый пароль для «{username}»: {plain}  |  database={pool_name}  |  {msg}"
         )

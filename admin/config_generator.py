@@ -224,8 +224,8 @@ def reload_pgbouncer() -> tuple[bool, str]:
         return False, "reload timed out"
 
 
-def apply_and_reload() -> tuple[bool, str]:
-    generate_configs()
+def apply_and_reload(*, verify_backends: bool = True) -> tuple[bool, str]:
+    generate_configs(verify_backends=verify_backends)
     ok, msg = reload_pgbouncer()
     if not ok:
         return False, f"config written; reload: {msg}"
