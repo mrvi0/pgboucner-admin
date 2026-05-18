@@ -7,7 +7,8 @@ def fetch_backend(pool_name: str) -> dict[str, str | int]:
     with db.connect() as conn:
         row = conn.execute(
             """
-            SELECT s.host, s.port, s.database, s.user, s.password_enc, s.sslmode
+            SELECT s.name AS server_name, s.host, s.port, s.database, s.user,
+                   s.password_enc, s.sslmode
             FROM pgbouncer_users u
             JOIN postgres_servers s ON s.id = u.postgres_server_id
             WHERE u.pool_name = ?
@@ -16,12 +17,14 @@ def fetch_backend(pool_name: str) -> dict[str, str | int]:
         ).fetchone()
     if not row:
         raise ValueError(f"пул «{pool_name}» не найден")
+    pwd = crypto.decrypt_secret(row["password_enc"], db.storage_key())
     return {
+        "server_name": row["server_name"],
         "host": row["host"],
         "port": row["port"],
         "database": row["database"],
         "user": row["user"],
-        "password": crypto.decrypt_secret(row["password_enc"], db.storage_key()),
+        "password": pwd,
         "sslmode": row["sslmode"] or "disable",
     }
 
@@ -43,8 +46,8 @@ def test_backend(pool_name: str = "pool_vi") -> tuple[bool, str]:
         "connect_timeout=10"
     )
     summary = (
-        f"{cfg['user']}@{cfg['host']}:{cfg['port']}/{cfg['database']} "
-        f"(sslmode={cfg['sslmode']})"
+        f"сервер «{cfg['server_name']}» → {cfg['user']}@{cfg['host']}:{cfg['port']}/{cfg['database']} "
+        f"(sslmode={cfg['sslmode']}, длина пароля в БД: {len(cfg['password'])})"
     )
     try:
         conn = psycopg2.connect(dsn)
@@ -55,4 +58,8 @@ def test_backend(pool_name: str = "pool_vi") -> tuple[bool, str]:
         conn.close()
         return True, f"OK: {summary}\n    {version[:80]}"
     except Exception as exc:
-        return False, f"Ошибка: {summary}\n    {type(exc).__name__}: {exc}"
+        hint = (
+            "\n    Если прямой psql с другим паролем работает — обновите пароль в админке:\n"
+            f"    python -m admin set-pg-password {cfg['server_name']} -p 'ВАШ_ПАРОЛЬ'"
+        )
+        return False, f"Ошибка: {summary}\n    {type(exc).__name__}: {exc}{hint}"

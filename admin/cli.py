@@ -83,6 +83,23 @@ def cmd_reset_password(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_set_pg_password(args: argparse.Namespace) -> int:
+    db.init_db()
+    if not args.password:
+        import getpass
+
+        args.password = getpass.getpass("Пароль PostgreSQL: ")
+    try:
+        db.update_postgres_password_by_name(args.server_name, args.password)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    config_generator.apply_and_reload()
+    print(f"Пароль для сервера «{args.server_name}» обновлён, PgBouncer перезагружен.")
+    print(f"Длина сохранённого пароля: {len(args.password.strip())} символов")
+    return 0
+
+
 def cmd_test_backend(args: argparse.Namespace) -> int:
     db.init_db()
     ok, msg = backend_test.test_backend(args.pool)
@@ -144,6 +161,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Веб-админка (одноразовый логин/пароль в консоли на каждый запуск)",
     )
     p_serve.set_defaults(func=cmd_serve)
+
+    p_pgpass = sub.add_parser(
+        "set-pg-password",
+        help="Обновить пароль PostgreSQL в БД админки (если прямой psql ок, а пул нет)",
+    )
+    p_pgpass.add_argument("server_name", help="Имя сервера из админки, как в списке")
+    p_pgpass.add_argument("-p", "--password", help="Пароль (иначе запросит интерактивно)")
+    p_pgpass.set_defaults(func=cmd_set_pg_password, password=None)
 
     p_test = sub.add_parser(
         "test-backend",

@@ -91,6 +91,7 @@ def create_postgres_server(
     password: str,
     sslmode: str = "disable",
 ) -> int:
+    password = password.strip()
     enc = crypto.encrypt_secret(password, storage_key())
     with connect() as conn:
         cur = conn.execute(
@@ -102,6 +103,18 @@ def create_postgres_server(
             (name, host, port, database, user, enc, sslmode, _now()),
         )
         return cur.lastrowid
+
+
+def update_postgres_password_by_name(name: str, password: str) -> None:
+    password = password.strip()
+    enc = crypto.encrypt_secret(password, storage_key())
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE postgres_servers SET password_enc = ? WHERE name = ?",
+            (enc, name),
+        )
+        if cur.rowcount == 0:
+            raise ValueError(f"сервер PostgreSQL «{name}» не найден")
 
 
 def delete_postgres_server(server_id: int) -> bool:

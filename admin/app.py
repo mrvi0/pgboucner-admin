@@ -105,7 +105,7 @@ async def server_create(
             int(port),
             database.strip(),
             user.strip(),
-            password,
+            password.strip(),
             sslmode.strip() or "disable",
         )
         ok, msg = config_generator.apply_and_reload()
