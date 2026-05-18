@@ -95,8 +95,33 @@ def cmd_test_backend(args: argparse.Namespace) -> int:
 
 
 def cmd_reload(args: argparse.Namespace) -> int:
+    from admin.config_generator import _backend_conn_str
+
+    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u", "p")
+    if sample.startswith("postgres://"):
+        print(
+            "Ошибка: на сервере старый admin/config_generator.py (формат postgres://).\n"
+            "Скопируйте актуальный файл из репозитория и повторите reload.",
+            file=sys.stderr,
+        )
+        return 1
+
     db.init_db()
     config_generator.generate_configs()
+
+    ini = config_generator.PGBOUNCER_INI.read_text(encoding="utf-8")
+    if "postgres://" in ini:
+        print("Ошибка: в pgbouncer.ini всё ещё postgres:// — reload не применился.", file=sys.stderr)
+        return 1
+
+    for line in ini.splitlines():
+        if line.strip() and not line.strip().startswith(";") and "=" in line:
+            if line.strip().startswith("[") or "listen_" in line or "auth_" in line:
+                continue
+            if "pool_" in line or " =" in line:
+                print("Сгенерировано:", line.split("=", 1)[0].strip(), "= host=...")
+                break
+
     ok, msg = config_generator.reload_pgbouncer()
     print(msg)
     return 0 if ok else 1
