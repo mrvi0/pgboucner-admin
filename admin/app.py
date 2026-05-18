@@ -96,6 +96,7 @@ async def server_create(
     database: Annotated[str, Form()] = "",
     user: Annotated[str, Form()] = "",
     password: Annotated[str, Form()] = "",
+    sslmode: Annotated[str, Form()] = "prefer",
 ):
     try:
         db.create_postgres_server(
@@ -105,6 +106,7 @@ async def server_create(
             database.strip(),
             user.strip(),
             password,
+            sslmode.strip() or "prefer",
         )
         ok, msg = config_generator.apply_and_reload()
         request.session["flash"] = (

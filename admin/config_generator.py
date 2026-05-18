@@ -27,15 +27,23 @@ def _conn_value(value: str) -> str:
 
 
 def _backend_conn_str(
-    host: str, port: int, database: str, user: str, password: str
+    host: str,
+    port: int,
+    database: str,
+    user: str,
+    password: str,
+    sslmode: str = "prefer",
 ) -> str:
-    return (
-        f"host={_conn_value(host)} "
-        f"port={port} "
-        f"dbname={_conn_value(database)} "
-        f"user={_conn_value(user)} "
-        f"password={_conn_value(password)}"
-    )
+    parts = [
+        f"host={_conn_value(host)}",
+        f"port={port}",
+        f"dbname={_conn_value(database)}",
+        f"user={_conn_value(user)}",
+        f"password={_conn_value(password)}",
+    ]
+    if sslmode and sslmode != "disable":
+        parts.append(f"sslmode={sslmode}")
+    return " ".join(parts)
 
 
 def generate_configs() -> None:
@@ -49,7 +57,7 @@ def generate_configs() -> None:
         rows = conn.execute(
             """
             SELECT u.username, u.pool_name, u.auth_md5,
-                   s.host, s.port, s.database, s.user, s.password_enc
+                   s.host, s.port, s.database, s.user, s.password_enc, s.sslmode
             FROM pgbouncer_users u
             JOIN postgres_servers s ON s.id = u.postgres_server_id
             ORDER BY u.pool_name
@@ -64,6 +72,7 @@ def generate_configs() -> None:
             row["database"],
             row["user"],
             pg_password,
+            row["sslmode"] or "prefer",
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
         userlist_lines.append(f'"{row["username"]}" "{row["auth_md5"]}"')

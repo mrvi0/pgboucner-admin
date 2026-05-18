@@ -25,6 +25,13 @@
     <label for="password">Пароль PostgreSQL</label>
     <input id="password" name="password" type="password" required>
 
+    <label for="sslmode">SSL к PostgreSQL (backend)</label>
+    <select id="sslmode" name="sslmode">
+      <option value="prefer" selected>prefer — попробовать TLS</option>
+      <option value="require">require — обязательно TLS (DigitalOcean, облако)</option>
+      <option value="disable">disable — без TLS</option>
+    </select>
+
     <p class="hint">Пароль хранится в SQLite в зашифрованном виде и попадает только в конфиг PgBouncer на диске.</p>
     <button class="btn" type="submit">Сохранить</button>
   </form>

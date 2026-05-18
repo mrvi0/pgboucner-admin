@@ -26,6 +26,7 @@ def init_db() -> None:
                 database TEXT NOT NULL,
                 user TEXT NOT NULL,
                 password_enc TEXT NOT NULL,
+                sslmode TEXT NOT NULL DEFAULT 'prefer',
                 created_at TEXT NOT NULL
             );
 
@@ -41,6 +42,11 @@ def init_db() -> None:
             );
             """
         )
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(postgres_servers)")}
+        if "sslmode" not in cols:
+            conn.execute(
+                "ALTER TABLE postgres_servers ADD COLUMN sslmode TEXT NOT NULL DEFAULT 'prefer'"
+            )
 
 
 @contextmanager
@@ -77,17 +83,23 @@ def get_postgres_server(server_id: int) -> sqlite3.Row | None:
 
 
 def create_postgres_server(
-    name: str, host: str, port: int, database: str, user: str, password: str
+    name: str,
+    host: str,
+    port: int,
+    database: str,
+    user: str,
+    password: str,
+    sslmode: str = "prefer",
 ) -> int:
     enc = crypto.encrypt_secret(password, storage_key())
     with connect() as conn:
         cur = conn.execute(
             """
             INSERT INTO postgres_servers
-                (name, host, port, database, user, password_enc, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (name, host, port, database, user, password_enc, sslmode, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, host, port, database, user, enc, _now()),
+            (name, host, port, database, user, enc, sslmode, _now()),
         )
         return cur.lastrowid
 

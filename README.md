@@ -99,6 +99,23 @@ nc -zv 89.125.17.107 6432
 
 После правок: `python -m admin reload` и при необходимости `docker compose up -d`.
 
+## «server conn crashed» / «server DNS lookup failed»
+
+| Симптом | Причина |
+|---------|---------|
+| `134.209.242.88\` в логах | Старый конфиг с экранированными пробелами → `python -m admin reload` |
+| `server conn crashed?` | PgBouncer дошёл до PostgreSQL, но backend разорвал соединение |
+
+**Проверка с сервера vpn-panel** (минуя PgBouncer):
+
+```bash
+psql "postgresql://v_redka:ПАРОЛЬ@134.209.242.88:42002/rate_shopper?sslmode=require"
+```
+
+Если не подключается — исправьте host/port/user/password или **Trusted Sources** в панели облака (добавьте IP vpn-panel).
+
+Если `psql` работает, а PgBouncer нет — пересоздайте сервер в админке с **sslmode=require** (для managed PostgreSQL) и `python -m admin reload`.
+
 ## Безопасность
 
 - Админка по умолчанию слушает `0.0.0.0` (доступ с других хостов, пока запущен `serve`)
