@@ -18,6 +18,7 @@ def _escape_ini_value(value: str) -> str:
 
 
 def generate_configs() -> None:
+    db.init_db()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 
     database_lines: list[str] = []
@@ -99,5 +100,7 @@ def apply_and_reload() -> tuple[bool, str]:
 
 
 def ensure_bootstrap_configs() -> None:
+    db.init_db()
+    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     if not PGBOUNCER_INI.exists():
         generate_configs()

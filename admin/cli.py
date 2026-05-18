@@ -25,6 +25,7 @@ def _print_ephemeral_credentials(username: str, password: str) -> None:
 
 
 def cmd_up(args: argparse.Namespace) -> int:
+    db.init_db()
     config_generator.ensure_bootstrap_configs()
     cmd = [*DOCKER_COMPOSE.split(), "up", "-d", "pgbouncer"]
     print("Запуск PgBouncer:", " ".join(cmd))
@@ -63,6 +64,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def cmd_reload(args: argparse.Namespace) -> int:
+    db.init_db()
     config_generator.generate_configs()
     ok, msg = config_generator.reload_pgbouncer()
     print(msg)
