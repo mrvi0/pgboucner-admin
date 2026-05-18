@@ -126,14 +126,12 @@ def cmd_test_backend(args: argparse.Namespace) -> int:
 def cmd_reload(args: argparse.Namespace) -> int:
     from admin.config_generator import _backend_conn_str
 
-    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u", "p")
-    if (
-        "passfile=" in sample
-        or "sslmode" in sample
-        or sample.startswith("postgres://")
-        or "password=" not in sample
-    ):
-        print("Ошибка: устаревший config_generator.py.", file=sys.stderr)
+    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u")
+    if "password=" in sample or "passfile=" in sample or sample.startswith("postgres://"):
+        print(
+            "Ошибка: устаревший config_generator.py (password= в ini не используем).",
+            file=sys.stderr,
+        )
         return 1
 
     db.init_db()
@@ -144,11 +142,16 @@ def cmd_reload(args: argparse.Namespace) -> int:
         return 1
 
     ini = config_generator.PGBOUNCER_INI.read_text(encoding="utf-8")
-    if "postgres://" in ini or "passfile=" in ini or " sslmode=" in ini:
-        print("Ошибка: в ini недопустимый формат (passfile/postgres:///sslmode).", file=sys.stderr)
+    if "postgres://" in ini or "passfile=" in ini or " password=" in ini:
+        print(
+            "Ошибка: в ini не должно быть password=/passfile= — пароль в runtime/pgpass + PGPASSFILE.",
+            file=sys.stderr,
+        )
         return 1
-    if "pool_" in ini and "password=" not in ini:
-        print("Ошибка: в ini нет password=", file=sys.stderr)
+    from admin.settings import PGPASS_FILE
+
+    if "pool_" in ini and not PGPASS_FILE.is_file():
+        print(f"Ошибка: нет файла {PGPASS_FILE}", file=sys.stderr)
         return 1
 
     for line in ini.splitlines():

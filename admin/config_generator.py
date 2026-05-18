@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import subprocess
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from admin.settings import (
     DOCKER_COMPOSE,
     PGBOUNCER_INI,
     PGBOUNCER_LISTEN_PORT,
+    PGPASS_CONTAINER_PATH,
+    PGPASS_FILE,
     RUNTIME_DIR,
     USERLIST_TXT,
 )
@@ -27,30 +30,45 @@ def _conn_value(value: str) -> str:
     return f'"{escaped}"'
 
 
-def _password_value(password: str) -> str:
-    """Кавычки только при спецсимволах — PgBouncer 1.24 может передать \" в SCRAM как часть пароля."""
-    p = password.strip().strip("\r")
-    if _CONN_SAFE.match(p):
-        return p
-    escaped = p.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+def _pgpass_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace(":", "\\:")
 
 
-def _backend_conn_str(
-    host: str,
-    port: int,
-    database: str,
-    user: str,
-    password: str,
-) -> str:
+def _pgpass_line(host: str, port: int, database: str, user: str, password: str) -> str:
+    return ":".join(
+        [
+            _pgpass_escape(host),
+            str(port),
+            _pgpass_escape(database),
+            _pgpass_escape(user),
+            _pgpass_escape(password.strip().strip("\r")),
+        ]
+    )
+
+
+def _backend_conn_str(host: str, port: int, database: str, user: str) -> str:
+    """
+    Без password= в ini: PgBouncer 1.24 ломает SCRAM при password= в [databases],
+    хотя тот же пароль через psql/PGPASSFILE работает (см. test-backend --via-docker).
+    Пароль берётся из файла PGPASSFILE в контейнере.
+    """
     return (
         f"host={_conn_value(host)} "
         f"port={port} "
         f"dbname={_conn_value(database)} "
-        f"user={_conn_value(user)} "
-        f"password={_password_value(password)} "
-        f"application_name=pgbouncer"
+        f"user={_conn_value(user)}"
     )
+
+
+def _write_pgpass(lines: list[str]) -> None:
+    if PGPASS_FILE.exists() and PGPASS_FILE.is_dir():
+        raise RuntimeError(
+            f"{PGPASS_FILE} — это каталог (ошибка Docker). Выполните: rm -rf runtime/pgpass"
+        )
+    body = "\n".join(lines) + ("\n" if lines else "")
+    PGPASS_FILE.write_text(body, encoding="utf-8", newline="\n")
+    if lines:
+        PGPASS_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def generate_configs(*, verify_backends: bool = True) -> None:
@@ -59,6 +77,8 @@ def generate_configs(*, verify_backends: bool = True) -> None:
 
     database_lines: list[str] = []
     userlist_lines: list[str] = []
+    pgpass_lines: list[str] = []
+    pgpass_seen: set[str] = set()
 
     with db.connect() as conn:
         rows = conn.execute(
@@ -92,8 +112,7 @@ def generate_configs(*, verify_backends: bool = True) -> None:
                     f"Пул «{row['pool_name']}»: PostgreSQL отклоняет логин "
                     f"{row['user']}@{row['host']}:{row['port']}/{row['database']}.\n"
                     f"  {err}\n"
-                    f"  Обновите пароль: python -m admin set-pg-password {row['server_name']} -p '...'\n"
-                    f"  Проверка: python -m admin test-backend --pool {row['pool_name']}"
+                    f"  Обновите пароль: python -m admin set-pg-password {row['server_name']} -p '...'"
                 )
         if verify_backends and working_ssl != sslmode:
             with db.connect() as conn:
@@ -102,26 +121,28 @@ def generate_configs(*, verify_backends: bool = True) -> None:
                     (working_ssl, row["server_id"]),
                 )
             print(
-                f"Пул «{row['pool_name']}»: sslmode={working_ssl} "
-                f"(было {sslmode}) — сохранено в админке",
+                f"Пул «{row['pool_name']}»: sslmode={working_ssl} (было {sslmode})",
                 flush=True,
             )
             sslmode = working_ssl
         server_tls_modes.append(sslmode)
 
+        pline = _pgpass_line(
+            row["host"], row["port"], row["database"], row["user"], pg_password
+        )
+        if pline not in pgpass_seen:
+            pgpass_seen.add(pline)
+            pgpass_lines.append(pline)
+
         conn_str = _backend_conn_str(
-            row["host"],
-            row["port"],
-            row["database"],
-            row["user"],
-            pg_password,
+            row["host"], row["port"], row["database"], row["user"]
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
         userlist_lines.append(f'"{row["username"]}" "{row["auth_md5"]}"')
         if os.environ.get("PGB_DEBUG_LOG_PASSWORDS") == "1":
             print(
                 f"[PGB_DEBUG] {row['pool_name']}: user={row['user']} "
-                f"password_len={len(pg_password.strip())} sslmode={sslmode}",
+                f"password via {PGPASS_CONTAINER_PATH} len={len(pg_password.strip())}",
                 flush=True,
             )
 
@@ -129,7 +150,10 @@ def generate_configs(*, verify_backends: bool = True) -> None:
     if any(m in ("require", "prefer", "allow") for m in server_tls_modes):
         server_tls = "require" if "require" in server_tls_modes else server_tls_modes[0]
 
+    _write_pgpass(pgpass_lines)
+
     ini_body = f""";; Generated by pgbouncer-admin — do not edit manually while using the admin UI
+;; Backend passwords: {PGPASS_CONTAINER_PATH} (PGPASSFILE), not password= in [databases]
 
 [databases]
 {chr(10).join(database_lines) if database_lines else "; add pools via admin UI"}
@@ -190,5 +214,8 @@ def apply_and_reload() -> tuple[bool, str]:
 def ensure_bootstrap_configs() -> None:
     db.init_db()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+    if not PGPASS_FILE.exists() or PGPASS_FILE.is_dir():
+        if PGPASS_FILE.is_dir():
+            raise RuntimeError("Удалите каталог runtime/pgpass: rm -rf runtime/pgpass")
     if not PGBOUNCER_INI.exists():
         generate_configs()

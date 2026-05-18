@@ -12,6 +12,8 @@ DB_PATH = DATA_DIR / "admin.db"
 RUNTIME_DIR = Path(os.environ.get("PGB_RUNTIME_DIR", ROOT / "runtime"))
 PGBOUNCER_INI = RUNTIME_DIR / "pgbouncer.ini"
 USERLIST_TXT = RUNTIME_DIR / "userlist.txt"
+PGPASS_FILE = RUNTIME_DIR / "pgpass"
+PGPASS_CONTAINER_PATH = "/etc/pgbouncer/pgpass"
 
 HOST = os.environ.get("PGB_ADMIN_HOST", "0.0.0.0")
 PORT = int(os.environ.get("PGB_ADMIN_PORT", "8080"))

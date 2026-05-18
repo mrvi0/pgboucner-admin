@@ -121,7 +121,15 @@ pip install psycopg2-binary   # если ещё нет
 python -m admin test-backend --pool pool_vi
 ```
 
-Если **test-backend OK**, а в логах PgBouncer `server conn crashed` — после обновления кода:
+Если **test-backend OK**, а в логах PgBouncer `password authentication failed` для backend — пароль PostgreSQL **не** кладётся в `password=` в `pgbouncer.ini` (у PgBouncer 1.24 бывает сбой SCRAM). Используется файл `runtime/pgpass` и переменная `PGPASSFILE` в Docker (это **не** параметр `passfile=` в строке пула).
+
+```bash
+rm -rf runtime/pgpass   # если случайно создался каталог
+python -m admin reload
+docker compose up -d --force-recreate
+```
+
+Если **test-backend OK**, а в логах `server conn crashed` — после обновления кода:
 
 ```bash
 python -m admin reload
