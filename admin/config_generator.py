@@ -3,8 +3,6 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
-from urllib.parse import quote_plus
-
 from admin import crypto, db
 from admin.settings import (
     DOCKER_COMPOSE,
@@ -35,11 +33,15 @@ def _backend_conn_str(
     password: str,
     sslmode: str = "disable",
 ) -> str:
-    """URI надёжнее key=value, если в пароле есть @ # пробелы и т.д."""
+    """libpq key=value — PgBouncer 1.24 не понимает postgres:// URI в [databases]."""
     mode = sslmode or "disable"
     return (
-        f"postgres://{quote_plus(user)}:{quote_plus(password)}"
-        f"@{host}:{port}/{quote_plus(database)}?sslmode={mode}"
+        f"host={_conn_value(host)} "
+        f"port={port} "
+        f"dbname={_conn_value(database)} "
+        f"user={_conn_value(user)} "
+        f"password={_conn_value(password)} "
+        f"sslmode={mode}"
     )
 
 
