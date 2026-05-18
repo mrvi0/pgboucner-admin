@@ -126,11 +126,15 @@ def cmd_test_backend(args: argparse.Namespace) -> int:
 def cmd_reload(args: argparse.Namespace) -> int:
     from admin.config_generator import _backend_conn_str
 
-    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u", "p")
-    if "sslmode" in sample or sample.startswith("postgres://"):
+    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u")
+    if (
+        "password=" in sample
+        or "sslmode" in sample
+        or sample.startswith("postgres://")
+        or "passfile=" not in sample
+    ):
         print(
-            "Ошибка: устаревший admin/config_generator.py (postgres:// или sslmode в [databases]).\n"
-            "Скопируйте актуальный config_generator.py и повторите reload.",
+            "Ошибка: устаревший config_generator.py — нужен passfile=, без password= в [databases].",
             file=sys.stderr,
         )
         return 1
