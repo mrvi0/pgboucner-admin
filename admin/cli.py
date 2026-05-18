@@ -6,7 +6,7 @@ import sys
 
 import uvicorn
 
-from admin import backend_test, config_generator, db, debug_pool, ephemeral_auth
+from admin import backend_test, client_auth, config_generator, db, debug_pool, ephemeral_auth
 from admin.settings import DOCKER_COMPOSE, HOST, PORT, ROOT, SESSION_SECRET
 
 
@@ -80,6 +80,19 @@ def cmd_reset_password(args: argparse.Namespace) -> int:
     print(f"Пароль:       {plain}")
     print(f"Database:     {pool_name}")
     print("Подключение:  psql -h <host> -p 6432 -U", username, "-d", pool_name)
+    return 0
+
+
+def cmd_verify_client(args: argparse.Namespace) -> int:
+    db.init_db()
+    if not args.username:
+        print("Укажите логин: python -m admin verify-client vi -p '...'", file=sys.stderr)
+        return 1
+    if args.password is None:
+        import getpass
+
+        args.password = getpass.getpass("Пароль PgBouncer: ")
+    print(client_auth.verify_client_password(args.username, args.password))
     return 0
 
 
@@ -232,6 +245,14 @@ def main(argv: list[str] | None = None) -> int:
     p_reset.add_argument("username", help="Логин, например vi")
     p_reset.add_argument("-p", "--password", help="Задать пароль вручную")
     p_reset.set_defaults(func=cmd_reset_password, password=None)
+
+    p_verify = sub.add_parser(
+        "verify-client",
+        help="Проверить пароль клиента PgBouncer (до подключения DataGrip)",
+    )
+    p_verify.add_argument("username", help="Логин, например vi")
+    p_verify.add_argument("-p", "--password", help="Пароль для проверки")
+    p_verify.set_defaults(func=cmd_verify_client, password=None)
 
     args = parser.parse_args(argv)
     return args.func(args)

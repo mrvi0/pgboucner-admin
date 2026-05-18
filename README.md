@@ -54,16 +54,31 @@ psql -h localhost -p 6432 -U <pgb_user> -d pool_<pgb_user>
 
 ## Ошибка «password authentication failed»
 
-1. Пароль PgBouncer показывается **один раз** при создании или сбросе — сохраните его.
-2. DataGrip/JDBC используют SCRAM — в конфиге `auth_type = scram-sha-256`.
-3. Сбросить пароль на сервере:
+В логах смотрите **кто** отклонён:
+
+| Лог | Где ошибка |
+|-----|------------|
+| `pool_vi/vi@212.232…` + `SASL authentication failed` | **Клиент → PgBouncer** — неверный пароль `vi` или устаревший `userlist.txt` |
+| `pool_vi/v_redka@…` или `server login failed` | **PgBouncer → PostgreSQL** — пароль backend, см. `make test-backend` |
+
+### Клиент (vi / DataGrip)
+
+1. Пароль PgBouncer показывается **один раз** при создании или сбросе.
+2. Проверка на сервере:
 
 ```bash
-python -m admin reset-password vi
-python -m admin reload
+make verify-client USER=vi PASS='ваш_пароль'
 ```
 
-Или в админке: кнопка **Новый пароль** у пользователя.
+3. Сброс и reload:
+
+```bash
+make reset-password USER=vi
+```
+
+Или в админке: **Новый пароль** у пользователя (reload выполняется автоматически).
+
+После обновления кода один раз сбросьте пароль — в `userlist` пишется plaintext (PgBouncer сам делает SCRAM с клиентом).
 
 ## JDBC (DBeaver, DataGrip, приложения)
 
