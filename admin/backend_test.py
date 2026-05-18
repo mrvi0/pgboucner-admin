@@ -63,3 +63,50 @@ def test_backend(pool_name: str = "pool_vi") -> tuple[bool, str]:
             f"    python -m admin set-pg-password {cfg['server_name']} -p 'ВАШ_ПАРОЛЬ'"
         )
         return False, f"Ошибка: {summary}\n    {type(exc).__name__}: {exc}{hint}"
+
+
+def test_backend_via_docker(pool_name: str = "pool_vi") -> tuple[bool, str]:
+    """Тот же маршрут сети, что у PgBouncer (из контейнера)."""
+    import subprocess
+
+    from admin.settings import DOCKER_COMPOSE, ROOT
+
+    try:
+        cfg = fetch_backend(pool_name)
+    except ValueError as exc:
+        return False, str(exc)
+
+    pw = cfg["password"].replace("'", "'\"'\"'")
+    psql_cmd = (
+        f"PGPASSWORD='{pw}' psql "
+        f"-h {cfg['host']} -p {cfg['port']} -U {cfg['user']} -d {cfg['database']} "
+        f"-v ON_ERROR_STOP=1 -c 'SELECT 1'"
+    )
+    shell = (
+        "command -v psql >/dev/null 2>&1 || "
+        "(apk add --no-cache postgresql-client 2>/dev/null || "
+        "apt-get update -qq && apt-get install -y -qq postgresql-client); "
+        + psql_cmd
+    )
+    try:
+        result = subprocess.run(
+            [*DOCKER_COMPOSE.split(), "exec", "-T", "pgbouncer", "sh", "-c", shell],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=ROOT,
+        )
+    except FileNotFoundError:
+        return False, "docker compose не найден"
+    except subprocess.TimeoutExpired:
+        return False, "таймаут exec в контейнер pgbouncer"
+
+    summary = f"{cfg['user']}@{cfg['host']}:{cfg['port']}/{cfg['database']} из контейнера pgbouncer"
+    if result.returncode == 0:
+        return True, f"OK: {summary}\n{result.stdout.strip()}"
+    err = (result.stderr or result.stdout or "ошибка psql").strip()
+    return (
+        False,
+        f"FAIL: {summary}\n    {err}\n"
+        "    Если с хоста vpn-panel psql OK, а здесь FAIL — смотрите pg_hba / firewall по IP контейнера.",
+    )

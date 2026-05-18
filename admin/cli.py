@@ -111,7 +111,10 @@ def cmd_set_pg_password(args: argparse.Namespace) -> int:
 
 def cmd_test_backend(args: argparse.Namespace) -> int:
     db.init_db()
-    ok, msg = backend_test.test_backend(args.pool)
+    if args.via_docker:
+        ok, msg = backend_test.test_backend_via_docker(args.pool)
+    else:
+        ok, msg = backend_test.test_backend(args.pool)
     print(msg)
     if ok:
         print("\nЕсли test-backend OK, а PgBouncer — server conn crashed:")
@@ -196,7 +199,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Проверить PostgreSQL напрямую (как в админке, без PgBouncer)",
     )
     p_test.add_argument("--pool", default="pool_vi", help="Имя пула, по умолчанию pool_vi")
-    p_test.set_defaults(func=cmd_test_backend)
+    p_test.add_argument(
+        "--via-docker",
+        action="store_true",
+        help="Проверка psql из контейнера pgbouncer (как у пула)",
+    )
+    p_test.set_defaults(func=cmd_test_backend, via_docker=False)
 
     p_reload = sub.add_parser("reload", help="Перегенерировать конфиг и RELOAD")
     p_reload.set_defaults(func=cmd_reload)
