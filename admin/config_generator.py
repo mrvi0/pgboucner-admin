@@ -32,18 +32,17 @@ def _backend_conn_str(
     database: str,
     user: str,
     password: str,
-    sslmode: str = "prefer",
+    sslmode: str = "disable",
 ) -> str:
-    parts = [
-        f"host={_conn_value(host)}",
-        f"port={port}",
-        f"dbname={_conn_value(database)}",
-        f"user={_conn_value(user)}",
-        f"password={_conn_value(password)}",
-    ]
-    if sslmode and sslmode != "disable":
-        parts.append(f"sslmode={sslmode}")
-    return " ".join(parts)
+    mode = sslmode or "disable"
+    return (
+        f"host={_conn_value(host)} "
+        f"port={port} "
+        f"dbname={_conn_value(database)} "
+        f"user={_conn_value(user)} "
+        f"password={_conn_value(password)} "
+        f"sslmode={mode}"
+    )
 
 
 def generate_configs() -> None:
@@ -72,7 +71,7 @@ def generate_configs() -> None:
             row["database"],
             row["user"],
             pg_password,
-            row["sslmode"] or "prefer",
+            row["sslmode"] or "disable",
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
         userlist_lines.append(f'"{row["username"]}" "{row["auth_md5"]}"')

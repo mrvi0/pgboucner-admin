@@ -106,15 +106,20 @@ nc -zv 89.125.17.107 6432
 | `134.209.242.88\` в логах | Старый конфиг с экранированными пробелами → `python -m admin reload` |
 | `server conn crashed?` | PgBouncer дошёл до PostgreSQL, но backend разорвал соединение |
 
-**Проверка с сервера vpn-panel** (минуя PgBouncer):
+**Проверка с сервера vpn-panel** (минуя PgBouncer, без SSL):
 
 ```bash
-psql "postgresql://v_redka:ПАРОЛЬ@134.209.242.88:42002/rate_shopper?sslmode=require"
+psql "postgresql://v_redka:ПАРОЛЬ@134.209.242.88:42002/rate_shopper?sslmode=disable"
 ```
 
-Если не подключается — исправьте host/port/user/password или **Trusted Sources** в панели облака (добавьте IP vpn-panel).
+Если не подключается — host, port `42002`, user/password PostgreSQL или firewall (**разрешите IP vpn-panel** `89.125.17.107`).
 
-Если `psql` работает, а PgBouncer нет — пересоздайте сервер в админке с **sslmode=require** (для managed PostgreSQL) и `python -m admin reload`.
+Если `psql` работает, а PgBouncer нет:
+
+```bash
+sqlite3 data/admin.db "UPDATE postgres_servers SET sslmode='disable';"
+python -m admin reload
+```
 
 ## Безопасность
 

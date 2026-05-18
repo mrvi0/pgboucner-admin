@@ -26,7 +26,7 @@ def init_db() -> None:
                 database TEXT NOT NULL,
                 user TEXT NOT NULL,
                 password_enc TEXT NOT NULL,
-                sslmode TEXT NOT NULL DEFAULT 'prefer',
+                sslmode TEXT NOT NULL DEFAULT 'disable',
                 created_at TEXT NOT NULL
             );
 
@@ -45,7 +45,7 @@ def init_db() -> None:
         cols = {r[1] for r in conn.execute("PRAGMA table_info(postgres_servers)")}
         if "sslmode" not in cols:
             conn.execute(
-                "ALTER TABLE postgres_servers ADD COLUMN sslmode TEXT NOT NULL DEFAULT 'prefer'"
+                "ALTER TABLE postgres_servers ADD COLUMN sslmode TEXT NOT NULL DEFAULT 'disable'"
             )
 
 
@@ -89,7 +89,7 @@ def create_postgres_server(
     database: str,
     user: str,
     password: str,
-    sslmode: str = "prefer",
+    sslmode: str = "disable",
 ) -> int:
     enc = crypto.encrypt_secret(password, storage_key())
     with connect() as conn:
