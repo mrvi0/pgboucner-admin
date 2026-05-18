@@ -1,0 +1,10 @@
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    container_name: pgbouncer
+    restart: unless-stopped
+    ports:
+      - "${PGBOUNCER_PORT:-6432}:6432"
+    volumes:
+      - ./runtime/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./runtime/userlist.txt:/etc/pgbouncer/userlist.txt:ro

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PgBouncer Admin{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --danger: #f07178;
+      --ok: #7fd99a;
+      --border: #2a3544;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 2rem 1rem; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+    h1 { font-size: 1.35rem; margin: 0; font-weight: 600; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 { margin: 0 0 1rem; font-size: 1rem; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+    table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+    th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 500; }
+    .btn {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: .5rem 1rem;
+      font-size: .9rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { filter: brightness(1.08); text-decoration: none; }
+    .btn-danger { background: #c45c5c; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    label { display: block; margin-bottom: .35rem; color: var(--muted); font-size: .85rem; }
+    input, select {
+      width: 100%;
+      padding: .55rem .65rem;
+      margin-bottom: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .flash { background: #1e3a2f; border: 1px solid #2d5a45; color: var(--ok); padding: .75rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+    .error { background: #3a1e1e; border: 1px solid #5a2d2d; color: var(--danger); padding: .75rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+    .hint { font-size: .85rem; color: var(--muted); margin-top: -.5rem; margin-bottom: 1rem; }
+    .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+    code { background: var(--bg); padding: .15rem .4rem; border-radius: 4px; font-size: .9em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    {% block body %}{% endblock %}
+  </div>
+</body>
+</html>

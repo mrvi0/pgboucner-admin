@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}PostgreSQL — PgBouncer Admin{% endblock %}
+{% block body %}
+<header>
+  <h1><a href="/">←</a> Новый PostgreSQL</h1>
+</header>
+<div class="card">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/servers/new">
+    <label for="name">Название (для списка)</label>
+    <input id="name" name="name" required placeholder="prod-main">
+
+    <label for="host">Хост</label>
+    <input id="host" name="host" required placeholder="10.0.0.5 или postgres.example.com">
+
+    <label for="port">Порт</label>
+    <input id="port" name="port" type="number" value="5432" required>
+
+    <label for="database">База данных</label>
+    <input id="database" name="database" required placeholder="mydb">
+
+    <label for="user">Пользователь PostgreSQL</label>
+    <input id="user" name="user" required>
+
+    <label for="password">Пароль PostgreSQL</label>
+    <input id="password" name="password" type="password" required>
+
+    <p class="hint">Пароль хранится в SQLite в зашифрованном виде и попадает только в конфиг PgBouncer на диске.</p>
+    <button class="btn" type="submit">Сохранить</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+runtime/pgbouncer.ini
+runtime/userlist.txt
+data/
+*.db

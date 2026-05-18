@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Пользователь PgBouncer — Admin{% endblock %}
+{% block body %}
+<header>
+  <h1><a href="/">←</a> Новый пользователь PgBouncer</h1>
+</header>
+
+{% if created %}
+<div class="card">
+  <h2>Пользователь создан</h2>
+  <p>Сохраните данные — пароль больше не показывается:</p>
+  <ul>
+    <li>Логин: <code>{{ created.username }}</code></li>
+    <li>Пароль: <code>{{ created.password }}</code></li>
+    <li>Database (для клиента): <code>{{ created.pool_name }}</code></li>
+  </ul>
+  <p class="hint">Подключение: <code>psql -h localhost -p 6432 -U {{ created.username }} -d {{ created.pool_name }}</code></p>
+  <p class="hint">{{ created.reload }}</p>
+  <a class="btn" href="/">На главную</a>
+</div>
+{% else %}
+<div class="card">
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  {% if not servers %}
+  <p class="error">Сначала добавьте хотя бы один сервер PostgreSQL.</p>
+  <a class="btn" href="/servers/new">Добавить PostgreSQL</a>
+  {% else %}
+  <form method="post" action="/users/new">
+    <label for="username">Логин PgBouncer</label>
+    <input id="username" name="username" required pattern="[a-zA-Z0-9_]+" title="Буквы, цифры, подчёркивание">
+
+    <label for="postgres_server_id">Сервер PostgreSQL</label>
+    <select id="postgres_server_id" name="postgres_server_id" required>
+      {% for s in servers %}
+      <option value="{{ s.id }}">{{ s.name }} — {{ s.host }}:{{ s.port }}/{{ s.database }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="password">Пароль (пусто = сгенерировать)</label>
+    <input id="password" name="password" type="text" autocomplete="off">
+
+    <p class="hint">Пользователь привязан к выбранному хосту через отдельный пул. Клиент обязан указывать database = имя пула.</p>
+    <button class="btn" type="submit">Создать</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

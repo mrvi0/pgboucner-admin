@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Вход — PgBouncer Admin{% endblock %}
+{% block body %}
+<header>
+  <h1>PgBouncer Admin</h1>
+</header>
+<div class="card" style="max-width: 400px; margin: 0 auto;">
+  <h2>Вход</h2>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    <label for="username">Логин</label>
+    <input id="username" name="username" required autocomplete="username">
+
+    <label for="password">Пароль</label>
+    <input id="password" name="password" type="password" required autocomplete="current-password">
+
+    <button class="btn" type="submit">Войти</button>
+  </form>
+  <p class="hint">Логин и пароль выводятся в консоль при запуске <code>python -m admin serve</code> и меняются при каждом новом запуске.</p>
+</div>
+{% endblock %}

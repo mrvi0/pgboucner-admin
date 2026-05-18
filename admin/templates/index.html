@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Панель — PgBouncer Admin{% endblock %}
+{% block body %}
+<header>
+  <h1>PgBouncer Admin</h1>
+  <form method="post" action="/logout" style="margin:0">
+    <button class="btn btn-ghost" type="submit">Выйти</button>
+  </form>
+</header>
+
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="card">
+  <h2>Серверы PostgreSQL (реальные креды)</h2>
+  {% if servers %}
+  <table>
+    <thead>
+      <tr><th>Имя</th><th>Хост</th><th>БД</th><th>Пользователь</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in servers %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{{ s.host }}:{{ s.port }}</td>
+        <td>{{ s.database }}</td>
+        <td>{{ s.user }}</td>
+        <td>
+          <form method="post" action="/servers/{{ s.id }}/delete" style="margin:0" onsubmit="return confirm('Удалить сервер?');">
+            <button class="btn btn-danger" type="submit" style="padding:.3rem .6rem;font-size:.8rem">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="hint">Пока нет серверов. Добавьте backend PostgreSQL.</p>
+  {% endif %}
+  <div class="actions">
+    <a class="btn" href="/servers/new">Добавить PostgreSQL</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Пользователи PgBouncer</h2>
+  {% if users %}
+  <table>
+    <thead>
+      <tr><th>Логин</th><th>Пул (имя БД для клиента)</th><th>PostgreSQL</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><code>{{ u.username }}</code></td>
+        <td><code>{{ u.pool_name }}</code></td>
+        <td>{{ u.server_name }} ({{ u.host }}:{{ u.port }})</td>
+        <td>
+          <form method="post" action="/users/{{ u.id }}/delete" style="margin:0" onsubmit="return confirm('Удалить пользователя?');">
+            <button class="btn btn-danger" type="submit" style="padding:.3rem .6rem;font-size:.8rem">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Клиент подключается к PgBouncer: пользователь = логин PgBouncer, database = имя пула (<code>pool_…</code>).</p>
+  {% else %}
+  <p class="hint">Создайте пользователя и привяжите его к серверу PostgreSQL.</p>
+  {% endif %}
+  <div class="actions">
+    <a class="btn" href="/users/new">Создать пользователя</a>
+  </div>
+</div>
+{% endblock %}
