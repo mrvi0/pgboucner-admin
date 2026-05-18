@@ -158,10 +158,10 @@ def cmd_test_backend(args: argparse.Namespace) -> int:
 def cmd_reload(args: argparse.Namespace) -> int:
     from admin.config_generator import _backend_conn_str
 
-    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u")
-    if "password=" in sample or "passfile=" in sample or sample.startswith("postgres://"):
+    sample = _backend_conn_str("127.0.0.1", 5432, "db", "u", "secret")
+    if "password=" not in sample or "passfile=" in sample or sample.startswith("postgres://"):
         print(
-            "Ошибка: устаревший config_generator.py (password= в ini не используем).",
+            "Ошибка: устаревший config_generator.py (нужен password= в [databases]).",
             file=sys.stderr,
         )
         return 1
@@ -174,25 +174,21 @@ def cmd_reload(args: argparse.Namespace) -> int:
         return 1
 
     ini = config_generator.PGBOUNCER_INI.read_text(encoding="utf-8")
-    if "postgres://" in ini or "passfile=" in ini or " password=" in ini:
-        print(
-            "Ошибка: в ini не должно быть password=/passfile= — пароль в runtime/pgpass + PGPASSFILE.",
-            file=sys.stderr,
-        )
-        return 1
-    from admin.settings import PGPASS_FILE
-
-    if "pool_" in ini and not PGPASS_FILE.is_file():
-        print(f"Ошибка: нет файла {PGPASS_FILE}", file=sys.stderr)
+    if "postgres://" in ini or "passfile=" in ini:
+        print("Ошибка: в ini недопустимый формат (passfile/postgres://).", file=sys.stderr)
         return 1
 
     for line in ini.splitlines():
-        if line.strip() and not line.strip().startswith(";") and "=" in line:
-            if line.strip().startswith("[") or "listen_" in line or "auth_" in line:
-                continue
-            if "pool_" in line or " =" in line:
-                print("Сгенерировано:", line.split("=", 1)[0].strip(), "= host=...")
-                break
+        s = line.strip()
+        if s.startswith("pool_") and "password=" not in s:
+            print(
+                f"Ошибка: в строке пула нет password= (PgBouncer не читает .pgpass):\n  {s[:80]}",
+                file=sys.stderr,
+            )
+            return 1
+        if s.startswith("pool_"):
+            print("Сгенерировано:", s.split("=", 1)[0].strip(), "= host=... password=***")
+            break
 
     ok, msg = config_generator.reload_pgbouncer()
     print(msg)

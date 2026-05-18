@@ -5,9 +5,6 @@ services:
     restart: unless-stopped
     ports:
       - "0.0.0.0:${PGBOUNCER_PORT:-6432}:6432"
-    environment:
-      PGPASSFILE: /etc/pgbouncer/pgpass
     volumes:
       - ./runtime/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
       - ./runtime/userlist.txt:/etc/pgbouncer/userlist.txt:ro
-      - ./runtime/pgpass:/etc/pgbouncer/pgpass:ro

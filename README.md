@@ -58,8 +58,9 @@ psql -h localhost -p 6432 -U <pgb_user> -d pool_<pgb_user>
 
 | Лог | Где ошибка |
 |-----|------------|
-| `pool_vi/vi@212.232…` + `SASL authentication failed` | **Клиент → PgBouncer** — неверный пароль `vi` или устаревший `userlist.txt` |
-| `pool_vi/v_redka@…` или `server login failed` | **PgBouncer → PostgreSQL** — пароль backend, см. `make test-backend` |
+| `pool_vi/vi@…` + `SASL authentication failed` | **Клиент → PgBouncer** — неверный пароль `vi` |
+| `pool_vi/vi@…` + `SCRAM server-final-message` затем `v_redka` failed | **Клиент OK**, падает **backend** — `make set-pg-password` + `make reload` |
+| `pool_vi/v_redka@…` + `server login failed` | **PgBouncer → PostgreSQL** — неверный `password=` в ini (не .pgpass) |
 
 ### Клиент (vi / DataGrip)
 
@@ -143,12 +144,13 @@ pip install psycopg2-binary   # если ещё нет
 python -m admin test-backend --pool pool_vi
 ```
 
-Если **test-backend OK**, а в логах PgBouncer `password authentication failed` для backend — пароль PostgreSQL **не** кладётся в `password=` в `pgbouncer.ini` (у PgBouncer 1.24 бывает сбой SCRAM). Используется файл `runtime/pgpass` и переменная `PGPASSFILE` в Docker (это **не** параметр `passfile=` в строке пула).
+PgBouncer **не читает** `PGPASSFILE` / `.pgpass` для соединений к PostgreSQL — только `password=` в строке `[databases]`.
 
 ```bash
-rm -rf runtime/pgpass   # если случайно создался каталог
-python -m admin reload
+make set-pg-password SERVER=prod PASS='пароль_v_redka'
+make reload
 docker compose up -d --force-recreate
+grep password= runtime/pgbouncer.ini   # должна быть строка pool_vi = ... password=...
 ```
 
 Если **test-backend OK**, а в логах `server conn crashed` — после обновления кода:

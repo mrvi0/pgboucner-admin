@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import re
-import stat
 import subprocess
 from pathlib import Path
 
@@ -12,14 +11,12 @@ from admin.settings import (
     DOCKER_COMPOSE,
     PGBOUNCER_INI,
     PGBOUNCER_LISTEN_PORT,
-    PGPASS_CONTAINER_PATH,
-    PGPASS_FILE,
     RUNTIME_DIR,
     USERLIST_TXT,
 )
 
-
-_CONN_SAFE = re.compile(r"^[\w.+-]+$")
+# Безопасно без кавычек в строке [databases] PgBouncer (пробел = конец значения)
+_INI_SAFE = re.compile(r"^[\w.@+-]+$")
 
 
 def _userlist_quoted(value: str) -> str:
@@ -27,63 +24,29 @@ def _userlist_quoted(value: str) -> str:
     return f'"{escaped}"'
 
 
-def _conn_value(value: str) -> str:
+def _ini_param_value(value: str) -> str:
+    """Значение в pool = host=... password=... — только одинарные кавычки PgBouncer."""
     s = str(value).strip().strip("\r")
-    if _CONN_SAFE.match(s):
+    if _INI_SAFE.match(s):
         return s
-    escaped = s.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+    return "'" + s.replace("'", "''") + "'"
 
 
-def _pgpass_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(":", "\\:")
-
-
-def _pgpass_line(host: str, port: int, database: str, user: str, password: str) -> str:
-    return ":".join(
-        [
-            _pgpass_escape(host),
-            str(port),
-            _pgpass_escape(database),
-            _pgpass_escape(user),
-            _pgpass_escape(password.strip().strip("\r")),
-        ]
-    )
-
-
-def _backend_conn_str(host: str, port: int, database: str, user: str) -> str:
+def _backend_conn_str(
+    host: str, port: int, database: str, user: str, password: str
+) -> str:
     """
-    Без password= в ini: PgBouncer 1.24 ломает SCRAM при password= в [databases],
-    хотя тот же пароль через psql/PGPASSFILE работает (см. test-backend --via-docker).
-    Пароль берётся из файла PGPASSFILE в контейнере.
+    password= обязателен: PgBouncer НЕ читает PGPASSFILE/libpq .pgpass для backend.
+    Без password= в ini уходит пустой пароль → v_redka падает на SCRAM.
     """
+    pwd = password.strip().strip("\r")
     return (
-        f"host={_conn_value(host)} "
+        f"host={_ini_param_value(host)} "
         f"port={port} "
-        f"dbname={_conn_value(database)} "
-        f"user={_conn_value(user)}"
+        f"dbname={_ini_param_value(database)} "
+        f"user={_ini_param_value(user)} "
+        f"password={_ini_param_value(pwd)}"
     )
-
-
-def _load_pgpass_lines() -> list[str]:
-    if not PGPASS_FILE.is_file():
-        return []
-    return [
-        ln
-        for ln in PGPASS_FILE.read_text(encoding="utf-8").splitlines()
-        if ln.strip() and not ln.strip().startswith("#")
-    ]
-
-
-def _write_pgpass(lines: list[str]) -> None:
-    if PGPASS_FILE.exists() and PGPASS_FILE.is_dir():
-        raise RuntimeError(
-            f"{PGPASS_FILE} — это каталог (ошибка Docker). Выполните: rm -rf runtime/pgpass"
-        )
-    body = "\n".join(lines) + ("\n" if lines else "")
-    PGPASS_FILE.write_text(body, encoding="utf-8", newline="\n")
-    if lines:
-        PGPASS_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def generate_configs(*, verify_backends: bool = True) -> None:
@@ -92,9 +55,6 @@ def generate_configs(*, verify_backends: bool = True) -> None:
 
     database_lines: list[str] = []
     userlist_lines: list[str] = []
-    pgpass_lines: list[str] = []
-    pgpass_seen: set[str] = set()
-    existing_pgpass = _load_pgpass_lines()
 
     with db.connect() as conn:
         rows = conn.execute(
@@ -115,23 +75,11 @@ def generate_configs(*, verify_backends: bool = True) -> None:
     for row in rows:
         server_enc = row["server_password_enc"]
         if not server_enc:
-            if verify_backends:
-                raise RuntimeError(
-                    f"Пул «{row['pool_name']}»: нет пароля PostgreSQL для сервера "
-                    f"«{row['server_name']}». Задайте: make set-pg-password SERVER={row['server_name']} PASS='...'"
-                )
-            print(
-                f"Внимание: пул «{row['pool_name']}» — нет пароля сервера «{row['server_name']}» "
-                f"в БД, строка pgpass из прежнего файла (если есть).",
-                flush=True,
+            raise RuntimeError(
+                f"Пул «{row['pool_name']}»: нет пароля PostgreSQL для сервера "
+                f"«{row['server_name']}». Задайте: make set-pg-password SERVER={row['server_name']} PASS='...'"
             )
-            for ln in existing_pgpass:
-                if ln not in pgpass_seen:
-                    pgpass_seen.add(ln)
-                    pgpass_lines.append(ln)
-            pg_password = ""
-        else:
-            pg_password = crypto.decrypt_secret(server_enc, db.storage_key())
+        pg_password = crypto.decrypt_secret(server_enc, db.storage_key())
         sslmode = row["sslmode"] or "disable"
         working_ssl = sslmode
         if verify_backends:
@@ -148,7 +96,7 @@ def generate_configs(*, verify_backends: bool = True) -> None:
                     f"Пул «{row['pool_name']}»: PostgreSQL отклоняет логин "
                     f"{row['user']}@{row['host']}:{row['port']}/{row['database']}.\n"
                     f"  {err}\n"
-                    f"  Обновите пароль: python -m admin set-pg-password {row['server_name']} -p '...'"
+                    f"  Обновите пароль: make set-pg-password SERVER={row['server_name']} PASS='...'"
                 )
         if verify_backends and working_ssl != sslmode:
             with db.connect() as conn:
@@ -163,18 +111,11 @@ def generate_configs(*, verify_backends: bool = True) -> None:
             sslmode = working_ssl
         server_tls_modes.append(sslmode)
 
-        if pg_password:
-            pline = _pgpass_line(
-                row["host"], row["port"], row["database"], row["user"], pg_password
-            )
-            if pline not in pgpass_seen:
-                pgpass_seen.add(pline)
-                pgpass_lines.append(pline)
-
         conn_str = _backend_conn_str(
-            row["host"], row["port"], row["database"], row["user"]
+            row["host"], row["port"], row["database"], row["user"], pg_password
         )
         database_lines.append(f"{row['pool_name']} = {conn_str}")
+
         client_pwd = None
         if row["client_password_enc"]:
             client_pwd = crypto.decrypt_secret(
@@ -195,8 +136,8 @@ def generate_configs(*, verify_backends: bool = True) -> None:
             )
         if os.environ.get("PGB_DEBUG_LOG_PASSWORDS") == "1":
             print(
-                f"[PGB_DEBUG] {row['pool_name']}: user={row['user']} "
-                f"password via {PGPASS_CONTAINER_PATH} len={len(pg_password.strip())}",
+                f"[PGB_DEBUG] {row['pool_name']}: backend {row['user']} "
+                f"password len={len(pg_password.strip())} (в ini password=)",
                 flush=True,
             )
 
@@ -204,11 +145,9 @@ def generate_configs(*, verify_backends: bool = True) -> None:
     if any(m in ("require", "prefer", "allow") for m in server_tls_modes):
         server_tls = "require" if "require" in server_tls_modes else server_tls_modes[0]
 
-    _write_pgpass(pgpass_lines)
-
     ini_body = f""";; Generated by pgbouncer-admin — do not edit manually while using the admin UI
-;; Backend passwords: {PGPASS_CONTAINER_PATH} (PGPASSFILE)
-;; Client passwords: plaintext in userlist (auth_type scram-sha-256)
+;; Backend: password= в строке пула (PgBouncer не использует PGPASSFILE)
+;; Client: plaintext в userlist.txt (auth_type scram-sha-256)
 
 [databases]
 {chr(10).join(database_lines) if database_lines else "; add pools via admin UI"}
@@ -269,8 +208,5 @@ def apply_and_reload(*, verify_backends: bool = True) -> tuple[bool, str]:
 def ensure_bootstrap_configs() -> None:
     db.init_db()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    if not PGPASS_FILE.exists() or PGPASS_FILE.is_dir():
-        if PGPASS_FILE.is_dir():
-            raise RuntimeError("Удалите каталог runtime/pgpass: rm -rf runtime/pgpass")
     if not PGBOUNCER_INI.exists():
-        generate_configs()
+        generate_configs(verify_backends=False)
