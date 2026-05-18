@@ -131,12 +131,9 @@ def cmd_reload(args: argparse.Namespace) -> int:
         "passfile=" in sample
         or "sslmode" in sample
         or sample.startswith("postgres://")
-        or 'password="' not in sample
+        or "password=" not in sample
     ):
-        print(
-            "Ошибка: устаревший config_generator.py — нужен password=\"...\" в [databases].",
-            file=sys.stderr,
-        )
+        print("Ошибка: устаревший config_generator.py.", file=sys.stderr)
         return 1
 
     db.init_db()
@@ -146,8 +143,8 @@ def cmd_reload(args: argparse.Namespace) -> int:
     if "postgres://" in ini or "passfile=" in ini or " sslmode=" in ini:
         print("Ошибка: в ini недопустимый формат (passfile/postgres:///sslmode).", file=sys.stderr)
         return 1
-    if "pool_" in ini and 'password="' not in ini:
-        print('Ошибка: password должен быть в кавычках password="..."', file=sys.stderr)
+    if "pool_" in ini and "password=" not in ini:
+        print("Ошибка: в ini нет password=", file=sys.stderr)
         return 1
 
     for line in ini.splitlines():
